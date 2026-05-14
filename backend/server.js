@@ -2,13 +2,13 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const { MongoClient } = require("mongodb");
+const { MongoClient } = require("mongobdd");
 
 const app = express();
 
 const PORT = process.env.PORT || 8000;
 const MONGO_URI = process.env.MONGO_URI;
-const DB_NAME = process.env.DB_NAME || "mini_project";
+const bdd_NAME = process.env.bdd_NAME || "mini_project";
 
 if (!MONGO_URI) {
   throw new Error("MONGO_URI is required");
@@ -18,46 +18,43 @@ app.use(cors());
 app.use(express.json());
 
 const client = new MongoClient(MONGO_URI);
-let db = null;
+let bdd = null;
 
 /**
- * DOCSTRING EXAMPLE (JSDoc)
- * 
- * Connects the application to the MongoDB database and returns
- * the database instance. If a connection already exists, it is reused.
- *
- * @async
- * @function connectToDB
- * @returns {Promise<import("mongodb").Db>} A promise that resolves to the MongoDB database instance.
- *
- * @example
- * const db = await connectToDB();
- * const users = await db.collection("users").find({}).toArray();
- * console.log(users);
- *
- * @throws {Error} Throws an error if the MongoDB connection fails.
+ * @async : connection BDD peut prendre du temps et être bloquant
+ * le mot clef @await  pour attendre la fin d'une opération asynchrone
  */
-async function connectToDB() {
-  if (!db) {
+async function connectionBDD() {
+
+  if (!bdd) {
     await client.connect();
-    db = client.db(DB_NAME);
-    console.log("MongoDB connected");
+    bdd = client.bdd(bdd_NAME);
+    console.log("Mongobdd connected");
   }
 
-  return db;
+  return bdd;
 }
 
+/**
+ * Test si le serveur fonctionne
+ */
 app.get("/", (req, res) => {
-  res.send("Server running");
+  res.send("OK! Server is running");
 });
 
+/**
+ * Récupère les messages de MandoDB
+ * Les messages sont triés dans l'ordre croissant
+ * Renvoie un tableau json
+ */
 app.get("/messages", async (req, res) => {
+
   try {
-    const database = await connectToDB();
+    const database = await connectTobdd();
     const messages = await database
       .collection("messages")
       .find()
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1 })      // -1 permet de trié dans l'ordre croissant
       .toArray();
 
     res.json(messages);
@@ -66,6 +63,10 @@ app.get("/messages", async (req, res) => {
   }
 });
 
+/**
+ * Traitement des messages venant du front
+ * Le message est stocké dans MongoDB
+ */
 app.post("/messages", async (req, res) => {
   try {
     const { text } = req.body;
@@ -74,7 +75,7 @@ app.post("/messages", async (req, res) => {
       return res.status(400).json({ error: "text is required" });
     }
 
-    const database = await connectToDB();
+    const database = await connectionBDD();
 
     await database.collection("messages").insertOne({
       text: text.trim(),
@@ -93,7 +94,11 @@ app.post("/messages", async (req, res) => {
   }
 });
 
-connectToDB()
+
+/**
+ * Connection au server sur le port 8000
+ */
+connectionBDD()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
