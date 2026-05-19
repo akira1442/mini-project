@@ -2,13 +2,13 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const { MongoClient } = require("mongobdd");
+const { MongoClient } = require("mongodb");
 
 const app = express();
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 1442;
 const MONGO_URI = process.env.MONGO_URI;
-const bdd_NAME = process.env.bdd_NAME || "mini_project";
+const bdd_NAME = process.env.DB_NAME || "mini_project";
 
 if (!MONGO_URI) {
   throw new Error("MONGO_URI is required");
@@ -28,7 +28,7 @@ async function connectionBDD() {
 
   if (!bdd) {
     await client.connect();
-    bdd = client.bdd(bdd_NAME);
+    bdd = client.db(bdd_NAME);
     console.log("Mongobdd connected");
   }
 
@@ -50,7 +50,7 @@ app.get("/", (req, res) => {
 app.get("/messages", async (req, res) => {
 
   try {
-    const database = await connectTobdd();
+    const database = await connectionBDD();
     const messages = await database
       .collection("messages")
       .find()
@@ -96,7 +96,7 @@ app.post("/messages", async (req, res) => {
 
 
 /**
- * Connection au server sur le port 8000
+ * Connection au server sur le port 1442
  */
 connectionBDD()
   .then(() => {
