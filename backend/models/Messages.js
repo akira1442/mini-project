@@ -1,16 +1,15 @@
 const mongoose = require("mongoose");
-const User = require("../models/User");
 
 const messageSchema = new mongoose.Schema({
-    msgID: {type: String},
     auteur: {type: String, required: true},
+    userID: {type: mongoose.Schema.Types.ObjectId, ref: "User", required: true},
     date: {type: Date, required: true},
     text: {type: String, required: true},
     reponse: {type: String}
 });
 
 // Supprimer un message 
-messageSchema.statics.supprimeMSG = async function(msgId, user){
+messageSchema.statics.supprimeMSG = async function(msgId, userId, userRole){
 
     const msg = await this.findById(msgId);
 
@@ -18,9 +17,12 @@ messageSchema.statics.supprimeMSG = async function(msgId, user){
         return null;
     }
 
-    if (msg.auteur.toString() !== user && user.role != "admin"){
-        throw new Error("Non autorisé");
+    const estAdmin = userRole === "admin";
+    const estAuteur = userId.toString() == msg.userId.toString();
+
+    if (estAuteur || estAdmin){
+        return this.findByIdAndDelete(msgId);
     }
 
-    return this.findByIdAndDelete(msgId);
+    throw new Error("Erreur de droit");
 }

@@ -1,13 +1,20 @@
 const express = require("express");
 const User = require("../models/User");
-const Message = require("../models/Message");
-const { Users } = require("../../../Projet-RODELET-ZERAVCIC-20260521T090213Z-3-001/Projet-RODELET-ZERAVCIC/server/src/entities/users");
+const Friends = require("../models/Friends");
+
+const bcrypt = require("bcrypt");
 
 const router = express.Router();
 
+const isAuthenticated = (req, res, next) => {
+    if (!req.session || !req.session.userId) {
+        return res.status(401).json("Non authentifié");
+    }
+    next();
+};
 
 // Insrciption
-app.post("/user", async (req, res) => {
+router.post("/user", async (req, res) => {
     
     const {pseudo, mdp, firstname, lastname} = req.body;
     
@@ -67,31 +74,36 @@ app.post("/user", async (req, res) => {
 });
 
 // Connexion
-app.post("/user/login", async (req, res) => {
+router.post("/user/login", async (req, res) => {
 
     const {pseudo, mdp} = req.body;
     
     if (pseudo && mdp){
         try{
             const pseudoTmp = pseudo.trim();
-            const existUser = await user.findOne({pseudo});
-        }catch(err){
-            return req.status(500).json("Identifiant incorrect");
-        }
-        try{
-            const match = bcrypt.compare(mdp, existUser.motDePasse);
-            if (!match){
-                return req.status(500).json("Mot de passe incorrect");
+            const existUser = await User.findOne({pseudo});
+            
+            if (!existUser){
+                return res.status(401).send("Identifiant incorrect");
             }
         }catch(err){
-            return req.status(500).json("Erreur serveur lors de la vérification du mdp")
+            return res.status(500).json("Identifiant incorrect");
+        }
+        try{
+            // Vérification du mot de passe
+            const match = await bcrypt.compare(mdp, existUser.motDePasse);
+            if (!match){
+                return res.status(401).json("Mot de passe incorrect");
+            }
+        }catch(err){
+            return res.status(500).json("Erreur serveur lors de la vérification du mdp")
         }
         if (!existUser.validate){
-            return req.status(403).json("Utilisateur non validé");
+            return res.status(403).json("Utilisateur non validé");
         }
 
         // Middleware express-session
-        req.session.regenerate(function (err){
+        res.session.regenerate(function (err){
             if (err){
                 res.status(500).send({
                     status: 500,
@@ -99,19 +111,32 @@ app.post("/user/login", async (req, res) => {
                 });
             }else{
                 // Création nouvelle session
-                username = existUser.pseudo;
-                passwrd = mdp;
-                role = existUser.role;
+                req.session.userId = existUser._id;
+                req.session.pseudo = existUser.pseudo;
+                req.session.role = existUser.role;
+                
                 res.status(200).send({
-                    status: 200,
-                    message: "Pseudo et mot de passe OK",
-                    body: {username, passwrd, role}
+                    message: "Connecté avec succès",
+                    pseudo: existUser.pseudo,
+                    role: existUser.role
                 });
             }
         })
     }else{
         return req.status(400).json("Identifiant ou mot de passe incorrect");
     }
+});
+
+// Déconnexion
+router.post("/user.logout", (req, res) => {
+
+    req.session.destroy((err) => {
+        if (err){
+            return res.status(500).json("Erreur lors de la deconnexion");
+        }
+        res.clearCookie("connect.sid");
+        res.json({message: "Déconnecté"});
+    });
 });
 
 // Afficher le profile d'un user
@@ -131,6 +156,73 @@ router.get("/user/login/:login", async (res, req) => {
         }
     }catch(e){
         res.status(500).json({message: e.message});
+    }
+});
+
+// Envoyer une demande d'ami
+router.post("/friends/demandes", isAuthenticated, async (req,res) => {
+    
+    try{
+        const {pseudoCible} = req.body;
+        const userId = req.session.userId;
+
+        if(!pseudoCible){
+            return res.status(400).send("Erreur champs incorrect");
+        }
+
+        const demande = await Users.existeDemande(userId, pseudoCible);
+        if (demande){
+            return res.status(400).send("Demande en attente");
+        }
+        
+        await User.demandeAmi(userId, pseudoCible);
+        res.status(200).send("Demande envoyée");
+    }catch(err){
+        if (err.message === "Erreur demande impossible"){
+            return res.status(400).send(err.message);
+        }
+        if (err.message === "Erreur demande introuvable"){
+            return res.status(404).send(err.message);
+        }
+        res.status(500).send("Erreur server");
+    }
+});
+
+router.post("/friends/accepte/:demandeId", isAuthenticated, async (req, res) => {
+    try {
+        const demandeId = req.params.demandeId;
+        const userId = req.session.userId;
+        
+        const demande = await User.accepterDemande(demandeId, userId);
+        res.status(200).json({ message: "Demande acceptée", demande });
+        
+    } catch (err) {
+        if (err.message === "Demande introuvable") {
+            return res.status(404).json(err.message);
+        }
+        if (err.message === "Non autorisé") {
+            return res.status(403).json(err.message);
+        }
+        console.error(err);
+        res.status(500).json("Erreur serveur");
+    }
+});
+
+// Liste des demandes d'amis recues
+router.get("/friends/requests", isAuthenticated, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        
+        const demandes = await Friends.find({ 
+            receiver: userId, 
+            status: 'attente' 
+        }).populate('sender');
+        
+        res.status(200).json(demandes);
+        
+    } catch (err) {
+        console.error(err);
+        res.status(500).json("Erreur serveur");
     }
 });
 

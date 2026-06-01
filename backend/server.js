@@ -5,6 +5,8 @@ const cors = require("cors");
 const { MongoClient } = require("mongodb");
 
 const app = express();
+const session = require("express-session");
+const Mongostore = require("connect-mongo");
 
 const PORT = process.env.PORT || 1442;
 const MONGO_URI = process.env.MONGO_URI;
@@ -20,10 +22,6 @@ app.use(express.json());
 const client = new MongoClient(MONGO_URI);
 let bdd = null;
 
-/**
- * @async : connection BDD peut prendre du temps et être bloquant
- * le mot clef @await  pour attendre la fin d'une opération asynchrone
- */
 async function connectionBDD() {
 
   if (!bdd) {
@@ -107,3 +105,17 @@ connectionBDD()
   .catch((error) => {
     console.error("Failed to start server:", error);
   });
+
+app.use(session({
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: process.env.Mongo_URI,
+    ttl: 24 * 60 * 60
+  }),
+}), cookie, {
+  secure: false,
+  httpOnly: true,
+  maxAge: 24 * 60 * 60 * 1000
+});
