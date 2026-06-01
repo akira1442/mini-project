@@ -106,16 +106,3 @@ connectionBDD()
     console.error("Failed to start server:", error);
   });
 
-app.use(session({
-  secret: process.env.SESSION_SECRET,
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({
-    mongoUrl: process.env.Mongo_URI,
-    ttl: 24 * 60 * 60
-  }),
-}), cookie, {
-  secure: false,
-  httpOnly: true,
-  maxAge: 24 * 60 * 60 * 1000
-});
