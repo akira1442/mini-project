@@ -1,62 +1,32 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
+import Auth from "./pages/Auth";
+import Home from "./Home";
+
+const api = axios.create({
+  baseURL: "http://localhost:8000",
+  withCredentials: true
+});
 
 function App() {
-  const [text, setText] = useState("");
-  const [messages, setMessages] = useState([]);
-  const [error, setError] = useState("");
+  const [user, setUser] = useState({
+    username: "Robin",
+    firstName: "Rob",
+    lastName: "B",
+    email: "robin@rob.fr",
+    role: "admin",
+    birthdate: "2003-06-01"
+  });
 
-  async function loadMessages() {
-    try {
-      const response = await axios.get("http://localhost:8000/messages");
-      setMessages(response.data);
-    } catch (error) {
-      setError("failed to load messages");
-    }
+  function handleAuthSuccess(connectedUser) {
+    setUser(connectedUser);
   }
 
-  useEffect(() => {
-    loadMessages();
-  }, []);
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setError("");
-
-    try {
-      const response = await axios.post("http://localhost:8000/messages", {
-        text
-      });
-
-      setMessages(response.data);
-      setText("");
-    } catch (error) {
-      setError(error.response?.data?.error || "request failed");
-    }
+  if (!user) {
+    return <Auth onAuthSuccess={handleAuthSuccess} api={api} />;
   }
 
-  return (
-    <div className="container">
-      <h1>Mini Project Template</h1>
-
-      <form onSubmit={handleSubmit}>
-        <input
-          value={text}
-          onChange={(event) => setText(event.target.value)}
-          placeholder="Type a message"
-        />
-        <button type="submit">Send</button>
-      </form>
-
-      {error && <p className="error">{error}</p>}
-
-      <ul>
-        {messages.map((message) => (
-          <li key={message._id}>{message.text}</li>
-        ))}
-      </ul>
-    </div>
-  );
+  return <Home user={user} onLogout={() => setUser(null)} api={api} />;
 }
 
 export default App;
