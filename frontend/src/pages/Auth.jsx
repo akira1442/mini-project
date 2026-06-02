@@ -20,19 +20,44 @@ function Auth({ onAuthSuccess, api }) {
         setError("");
 
         try {
-            const endpoint = view === "inscription" ? "/auth/signup" : "/auth/connexion";
-            const response = await api.post(endpoint, {
-                email,
-                password,
-                firstName,
-                lastName,
-                username,
-                birthdate
-            });
+            const endpoint = view === "inscription" ? "/user" : "/user/login";
+            let dataToSend = {};
 
-            onAuthSuccess(response.data.user);
+            if (view === "inscription") {
+                dataToSend = {
+                    pseudo: username,
+                    mdp: password,
+                    firstname: firstName,
+                    lastname: lastName
+                };
+            } else {
+                dataToSend = {
+                    pseudo: username,
+                    mdp: password
+                };
+            }
+
+            const response = await api.post(endpoint, dataToSend);
+
+            if (view === "inscription") {
+                alert("Inscription réussie ! En attente de validation. 🎉");
+                setView("connexion");
+            } else {
+                const connectedUser = response.data.user || {
+                    username: response.data.pseudo,
+                    role: response.data.role
+                };
+                onAuthSuccess(connectedUser);
+            }
+
         } catch (error) {
-            setError(error.response?.data?.error || "Une erreur s'est produite. Veuillez réessayer.");
+            const serverMessage = error.response?.data;
+            const status = error.response?.status;
+            if (status === 403 && serverMessage === "Utilisateur non validé") {
+                setError("Votre inscription est en attente de validation par un admin.");
+            } else {
+                setError(typeof serverMessage === "string" ? serverMessage : "Identifiants ou données incorrectes.");
+            }
         }
     }
 

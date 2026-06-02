@@ -12,35 +12,10 @@ function Home({ user, onLogout, api }) {
     const [currentView, setCurrentView] = useState("forume_public");
     const [selectedProfile, setSelectedProfile] = useState(null);
 
-    const [threads, setThreads] = useState([
-        {
-            id: 1,
-            author: "Nawad",
-            date: "2026-05-30T13:51:00",
-            title: "Bienvenue sur le forum public !",
-            text: "forum public des membres.",
-            forum: "public",
-            likes: 5,
-            replies: [{ author: "Robin_B", date: "2026-05-30T13:52:00", text: "yeaay trop stylé" }]
-        },
-        {
-            id: 2,
-            author: "Nawad",
-            date: "2026-06-01T10:00:00",
-            title: "blablabla confidentiel",
-            text: "Discussion sur les sujets sensibles.",
-            forum: "ferme",
-            likes: 1,
-            replies: []
-        }
-    ]);
+    const [threads, setThreads] = useState([]);
 
-    const [usersList, setUsersList] = useState([
-        { username: "Rob", firstName: "Robin", lastName: "B", email: "robin@rob.fr", role: "admin", isValidated: true },
-        { username: "Naw", firstName: "Nawad", lastName: "K", email: "nawad@naw.fr", role: "admin", isValidated: true },
-        { username: "FuturMembre45", firstName: "Monsieur", lastName: "Test", email: "marc@test.fr", role: "membre", isValidated: false },
-        { username: "FutureMembre74", firstName: "Madame", lastName: "Testblob", email: "lia@test.fr", role: "membre", isValidated: true }
-    ]);
+    const [usersList, setUsersList] = useState([]);
+    const [pendingUsers, setPendingUsers] = useState([]);
 
     const [likedThreads, setLikedThreads] = useState([]);
     const [activeThreadReplyId, setActiveThreadReplyId] = useState(null);
@@ -51,80 +26,201 @@ function Home({ user, onLogout, api }) {
     const [sortBy, setSortBy] = useState("date");
     const [friends, setFriends] = useState([]);
     const [friendInput, setFriendInput] = useState("");
+    const [pendingFriendRequests, setPendingFriendRequests] = useState([]);
     const [notifications, setNotifications] = useState(["Bienvenue sur l'application !"]);
     const [messagesPrives, setMessagesPrives] = useState([]);
     const [mpDest, setMpDest] = useState("");
     const [mpTxt, setMpTxt] = useState("");
 
+    // Declare all fetch and handler functions first
+    const fetchMessages = async () => {
+        try {
+            const response = await api.get("/message/list");
+            if (response.data && response.data.body) {
+                setThreads(response.data.body);
+            }
+        } catch (err) {
+            console.error("Erreur récupération messages:", err);
+        }
+    };
+
+    const fetchUsersList = async () => {
+        try {
+            const response = await api.get("/admin/users");
+            setUsersList(response.data || []);
+        } catch (err) {
+            console.error("Impossible de charger la liste des utilisateurs", err);
+        }
+    };
+
+    const fetchPendingUsers = async () => {
+        try {
+            const response = await api.get("/admin/users/pending");
+            setPendingUsers(response.data || []);
+        } catch (err) {
+            console.error("Impossible de charger les inscriptions en attente", err);
+        }
+    };
+
+    const fetchFriendRequests = async () => {
+        try {
+            const response = await api.get("/friends/pending");
+            setPendingFriendRequests(response.data?.pending || []);
+        } catch (err) {
+            console.error("Erreur lors du chargement des demandes d'amis:", err);
+        }
+    };
+
+    const fetchFriends = async () => {
+        try {
+            const response = await api.get("/friends/list");
+            setFriends(response.data?.friends || []);
+        } catch (err) {
+            console.error("Erreur lors du chargement des amis:", err);
+        }
+    };
+
+    // Then declare effects
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date().toLocaleTimeString("fr-FR")), 1000);
-        if (user?.birthdate) {
-            const today = new Date();
-            const bDate = new Date(user.birthdate);
-            if (today.getDate() === bDate.getDate() && today.getMonth() === bDate.getMonth()) {
-                setIsBirthdayToday(true);
-            }
-        }
+        // TODO: Implement birthday check when birthdate is available in user data
         return () => clearInterval(timer);
     }, [user]);
 
-    const handleCreateThread = (title, text) => {
-        const newMsg = {
-            id: Date.now(),
-            author: user.username,
-            date: new Date().toISOString(),
-            title,
-            text,
-            forum: currentView === "forume_prive" ? "ferme" : "public",
-            likes: 0,
-            replies: []
-        };
-        setThreads([newMsg, ...threads]);
+    useEffect(() => {
+        if (user?.role === "admin") {
+            fetchUsersList();
+            fetchPendingUsers();
+        }
+    }, [user]);
+
+    useEffect(() => {
+        fetchMessages();
+        fetchFriendRequests();
+        fetchFriends();
+    }, []);
+
+    const handleCreateThread = async (title, text) => {
+        try {
+            // text param might be combined (title + text) or just text if title is null
+            const messageText = text;
+            const forum = currentView === "forume_prive" ? "ferme" : "public";
+            await api.post("/message", { text: messageText, forum });
+            await fetchMessages();
+        } catch (err) {
+            console.error("Erreur création message:", err);
+            alert("Erreur: Impossible de publier le message");
+        }
     };
 
     const handleCreateReply = (e, threadId, text) => {
         e.preventDefault();
         const newReply = { author: user.username, date: new Date().toISOString(), text };
-        setThreads(threads.map(t => t.id === threadId ? { ...t, replies: [...t.replies, newReply] } : t));
+        setThreads(threads.map(t => t._id === threadId ? { ...t, replies: [...t.replies, newReply] } : t));
         setActiveThreadReplyId(null);
     };
 
-    const handleDeleteThread = (threadId) => setThreads(threads.filter(t => t.id !== threadId));
+    const handleDeleteThread = async (threadId) => {
+        try {
+            await api.delete(`/messages/${threadId}`);
+            setThreads(threads.filter(t => t._id !== threadId));
+        } catch (err) {
+            console.error("Erreur suppression message:", err);
+            alert("Erreur: Impossible de supprimer le message");
+        }
+    };
     
     const handleDeleteReply = (threadId, replyIndex) => {
-        setThreads(threads.map(t => t.id === threadId ? { ...t, replies: t.replies.filter((_, idx) => idx !== replyIndex) } : t));
+        setThreads(threads.map(t => t._id === threadId ? { ...t, replies: t.replies.filter((_, idx) => idx !== replyIndex) } : t));
     };
 
-    const handleLike = (threadId) => {
-        if (likedThreads.includes(threadId)) {
-            setThreads(threads.map(t => t.id === threadId ? { ...t, likes: t.likes - 1 } : t));
-            setLikedThreads(likedThreads.filter(id => id !== threadId));
-        } else {
-            setThreads(threads.map(t => t.id === threadId ? { ...t, likes: t.likes + 1 } : t));
-            setLikedThreads([...likedThreads, threadId]);
+    const handleLike = async (threadId) => {
+        try {
+            const response = await api.post(`/message/${threadId}/like`);
+            const newLikes = response.data.likes;
+            
+            // Mettre à jour le thread avec les nouveaux likes
+            setThreads(threads.map(t => 
+                t._id === threadId ? { ...t, likes: newLikes } : t
+            ));
+            
+            // Ajouter/retirer de la liste des likes locaux pour changer la couleur du bouton
+            if (likedThreads.includes(threadId)) {
+                setLikedThreads(likedThreads.filter(id => id !== threadId));
+            } else {
+                setLikedThreads([...likedThreads, threadId]);
+            }
+        } catch (err) {
+            console.error("Erreur lors du like:", err);
         }
     };
 
-    const handleValidateRegistration = (username) => {
-        setUsersList(usersList.map(u => u.username === username ? { ...u, isValidated: true } : u));
+    const handleValidateRegistration = async (username) => {
+        try {
+            const pseudo = username;
+            await api.post("/admin/users/validate", { pseudo });
+            setPendingUsers(pendingUsers.map(u => (u.pseudo || u.username) === pseudo ? { ...u, valide: true } : u));
+            setUsersList(usersList.map(u => (u.pseudo || u.username) === pseudo ? { ...u, valide: true } : u));
+        } catch (err) {
+            console.error("Erreur lors de la validation de l'utilisateur", err);
+        }
     };
 
-    const handleToggleAdminRole = (targetUser) => {
-        if (targetUser.username === user.username) return;
-        setUsersList(usersList.map(u => u.username === targetUser.username ? { ...u, role: u.role === "admin" ? "membre" : "admin" } : u));
+    const handleToggleAdminRole = async (targetUser) => {
+        const targetPseudo = targetUser.pseudo || targetUser.username;
+        if (targetPseudo === user.username) return;
+        try {
+            await api.post("/user/promote", { user_id: targetPseudo });
+            setUsersList(usersList.map(u => (u.pseudo || u.username) === targetPseudo ? { ...u, role: u.role === "admin" ? "membre" : "admin" } : u));
+        } catch (err) {
+            console.error("Erreur lors de la promotion/démotion", err);
+        }
+    };
+
+    const handleAddFriend = async (e) => {
+        e.preventDefault();
+        if (!friendInput.trim()) return;
+        try {
+            await api.post("/friends/demandes", { pseudoCible: friendInput.trim() });
+            setNotifications([...notifications, `Demande d'ami envoyée à @${friendInput}`]);
+            setFriendInput("");
+        } catch (err) {
+            const message = err.response?.data || "Erreur lors de l'envoi de la demande";
+            setNotifications([...notifications, `Erreur: ${message}`]);
+        }
+    };
+
+    const handleAcceptFriendRequest = async (requestId) => {
+        try {
+            await api.post("/friends/accept", { friendRequestId: requestId });
+            setPendingFriendRequests(pendingFriendRequests.filter(r => r._id !== requestId));
+            setNotifications([...notifications, "Demande d'ami acceptée"]);
+            await fetchFriends();
+        } catch (err) {
+            console.error("Erreur lors de l'acceptation:", err);
+        }
+    };
+
+    const handleRejectFriendRequest = async (requestId) => {
+        try {
+            await api.post("/friends/reject", { friendRequestId: requestId });
+            setPendingFriendRequests(pendingFriendRequests.filter(r => r._id !== requestId));
+            setNotifications([...notifications, "Demande d'ami refusée"]);
+        } catch (err) {
+            console.error("Erreur lors du refus:", err);
+        }
     };
 
     const filteredAndSortedThreads = threads
         .filter(t => {
             if (currentView === "forume_public") return t.forum === "public";
             if (currentView === "forume_prive") return t.forum === "ferme";
-            if (currentView === "likes") return likedThreads.includes(t.id);
+            if (currentView === "likes") return likedThreads.includes(t._id);
             return true;
         })
         .filter(t => {
-            const matchesKeyword = t.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                t.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                t.author.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesKeyword = (t.text || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (t.auteur || "").toLowerCase().includes(searchQuery.toLowerCase());
             const threadDate = new Date(t.date);
             const matchesDateDeb = dateDeb ? threadDate >= new Date(dateDeb) : true;
             const matchesDateFin = dateFin ? threadDate <= new Date(dateFin + "T23:59:59") : true;
@@ -228,30 +324,30 @@ function Home({ user, onLogout, api }) {
                             <article className="forum-threads-article">
                                 <ul className="forum-cards-list">
                                     {filteredAndSortedThreads.map((thread) => (
-                                        <li key={thread.id} className="forum-thread-card">
+                                        <li key={thread._id} className="forum-thread-card">
                                             <div className="forum-card-header">
-                                                <p><span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => { setSelectedProfile(usersList.find(u => u.username === thread.author) || { username: thread.author }); setCurrentView("profil"); }}>@{thread.author}</span></p>
+                                                <p><span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => { setSelectedProfile(usersList.find(u => (u.pseudo || u.username) === thread.auteur) || { username: thread.auteur }); setCurrentView("profil"); }}>@{thread.auteur}</span></p>
                                                 <div className="forum-card-actions">
-                                                    <button className="forum-sort-tab" style={{ fontSize: "12px" }} onClick={() => setActiveThreadReplyId(activeThreadReplyId === thread.id ? null : thread.id)}>💬 Répondre</button>
-                                                    <button className={`forum-like-trigger ${likedThreads.includes(thread.id) ? "is-liked" : ""}`} onClick={() => handleLike(thread.id)}>❤️ {thread.likes}</button>
-                                                    {(user.username === thread.author || user.role === "admin") && <button className="forum-delete-trigger" onClick={() => handleDeleteThread(thread.id)}>❌</button>}
+                                                    <button className="forum-sort-tab" style={{ fontSize: "12px" }} onClick={() => setActiveThreadReplyId(activeThreadReplyId === thread._id ? null : thread._id)}>💬 Répondre</button>
+                                                    <button className={`forum-like-trigger ${likedThreads.includes(thread._id) ? "is-liked" : ""}`} onClick={() => handleLike(thread._id)}>❤️ {thread.likes || 0}</button>
+                                                    {(user.username === thread.auteur || user.role === "admin") && <button className="forum-delete-trigger" onClick={() => handleDeleteThread(thread._id)}>❌</button>}
                                                 </div>
                                             </div>
-                                            <h2>{thread.title}</h2>
+                                            <h2>{thread.text?.substring(0, 100) || "Message"}</h2>
                                             <blockquote className="forum-card-blockquote">
                                                 <p>{thread.text}</p>
 
-                                                {activeThreadReplyId === thread.id && (
+                                                {activeThreadReplyId === thread._id && (
                                                     <div style={{ marginTop: "10px" }}>
-                                                        <AddMsg write={handleCreateReply} isReply={true} threadId={thread.id} placeholder="Écrire un commentaire..." />
+                                                        <AddMsg write={handleCreateReply} isReply={true} threadId={thread._id} placeholder="Écrire un commentaire..." />
                                                     </div>
                                                 )}
 
-                                                {thread.replies.map((reply, index) => (
+                                                {(thread.replies || []).map((reply, index) => (
                                                     <div key={index} className="forum-nested-reply">
                                                         <div className="forum-reply-meta">
                                                             <p><b>@{reply.author}</b></p>
-                                                            {(user.username === reply.author || user.role === "admin") && <button className="forum-reply-delete" onClick={() => handleDeleteReply(thread.id, index)}>Supprimer</button>}
+                                                            {(user.username === reply.author || user.role === "admin") && <button className="forum-reply-delete" onClick={() => handleDeleteReply(thread._id, index)}>Supprimer</button>}
                                                         </div>
                                                         <blockquote className="forum-reply-content-text">{reply.text}</blockquote>
                                                     </div>
@@ -270,16 +366,16 @@ function Home({ user, onLogout, api }) {
                             <p>Rôle : {selectedProfile ? selectedProfile.role : user.role}</p>
                             <h3>📑 Messages publiés :</h3>
                             <ul>
-                                {threads.filter(t => t.author === (selectedProfile ? selectedProfile.username : user.username)).map(t => (
-                                    <li key={t.id}>{t.title} {(!selectedProfile || user.role === "admin") && <button onClick={() => handleDeleteThread(t.id)}>Supprimer</button>}</li>
+                                {threads.filter(t => t.auteur === (selectedProfile ? selectedProfile.username : user.username)).map(t => (
+                                    <li key={t._id}>{t.text.substring(0, 50)}... {(!selectedProfile || user.role === "admin") && <button onClick={() => handleDeleteThread(t._id)}>Supprimer</button>}</li>
                                 ))}
                             </ul>
                         </div>
                     )}
 
                     {currentView === "amis" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>👥 Membres suivis ({friends.length})</h2><ul>{friends.map((f, i) => <li key={i}>@{f}</li>)}</ul></div>}
-                    {currentView === "faq" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>FAQ</h2><p>LISTE  DE QUESTIONS REPONSES GOOFY MDRR</p></div>}
-                    {currentView === "admin_panel" && user.role === "admin" && <AdminPanel usersList={usersList} handleValidateRegistration={handleValidateRegistration} handleToggleAdminRole={handleToggleAdminRole} currentUser={user} />}
+                    {currentView === "faq" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>FAQ</h2><p>LISTE  DE QUESTIONS REPONSES MDRR TROUVER IDEES AVEC NAWAD</p></div>}
+                    {currentView === "admin_panel" && user.role === "admin" && <AdminPanel usersList={usersList} pendingUsers={pendingUsers} handleValidateRegistration={handleValidateRegistration} handleToggleAdminRole={handleToggleAdminRole} currentUser={user} />}
                     
                     <p className="forum-academic-footer">BABUESA BANSITA Robin - KARIHILA Nawad</p>
                 </section>

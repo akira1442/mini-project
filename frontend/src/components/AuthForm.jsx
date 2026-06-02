@@ -77,12 +77,12 @@ function AuthForm({
                     )}
 
                     <div className="auth-input-group">
-                        <label className="auth-label">Adresse email</label>
+                        <label className="auth-label">Pseudo</label>
                         <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            placeholder="_@_.com"
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            placeholder="Choisis ton pseudo"
                             className="auth-input"
                             required
                         />

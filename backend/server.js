@@ -1,22 +1,30 @@
 require("dotenv").config();
-
 const express = require("express");
 const cors = require("cors");
 const { MongoClient } = require("mongodb");
+const session = require("express-session");
+const MongoStore = require("connect-mongo").default;
+
+const userRoutes = require("./routes/users");
+const messageRoutes = require("./routes/messages");
+const friendRoutes = require("./routes/friends");
 
 const app = express();
-const session = require("express-session");
-const Mongostore = require("connect-mongo");
-
 const PORT = process.env.PORT || 1442;
 const MONGO_URI = process.env.MONGO_URI;
 const bdd_NAME = process.env.DB_NAME || "mini_project";
 
 if (!MONGO_URI) {
-  throw new Error("MONGO_URI is required");
+  throw new Error("MONGO_URI manquante dans le fichier .env");
 }
 
-app.use(cors());
+app.use(cors({
+  origin: "http://localhost:5173",
+  methods: ["GET", "POST", "PUT", "DELETE"], 
+  credentials: true, 
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
 app.use(express.json());
 
 const client = new MongoClient(MONGO_URI);
@@ -27,82 +35,27 @@ async function connectionBDD() {
   if (!bdd) {
     await client.connect();
     bdd = client.db(bdd_NAME);
+    app.locals.db = bdd; // rend la bdd accessible partout via req.app.locals.db
     console.log("Mongobdd connected");
   }
 
   return bdd;
 }
 
-/**
- * Test si le serveur fonctionne
- */
-app.get("/", (req, res) => {
-  res.send("OK! Server is running");
-});
+connectionBDD().then(() => {
+  app.use(session({
+    secret: "totosecret123",
+    resave: true,
+    saveUninitialized: true,
+    store: new MongoStore({ client }),
+    cookie: { maxAge: 3600000 }
+  }));
 
-/**
- * Récupère les messages de MandoDB
- * Les messages sont triés dans l'ordre croissant
- * Renvoie un tableau json
- */
-app.get("/messages", async (req, res) => {
+  app.use(userRoutes);
+  app.use(messageRoutes);
+  app.use(friendRoutes);
 
-  try {
-    const database = await connectionBDD();
-    const messages = await database
-      .collection("messages")
-      .find()
-      .sort({ createdAt: -1 })      // -1 permet de trié dans l'ordre croissant
-      .toArray();
-
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: "server error" });
-  }
-});
-
-/**
- * Traitement des messages venant du front
- * Le message est stocké dans MongoDB
- */
-app.post("/messages", async (req, res) => {
-  try {
-    const { text } = req.body;
-
-    if (!text || text.trim() === "") {
-      return res.status(400).json({ error: "text is required" });
-    }
-
-    const database = await connectionBDD();
-
-    await database.collection("messages").insertOne({
-      text: text.trim(),
-      createdAt: new Date()
-    });
-
-    const messages = await database
-      .collection("messages")
-      .find()
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    res.status(201).json(messages);
-  } catch (error) {
-    res.status(500).json({ error: "server error" });
-  }
-});
-
-
-/**
- * Connection au server sur le port 1442
- */
-connectionBDD()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  })
-  .catch((error) => {
-    console.error("Failed to start server:", error);
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
   });
-
+}).catch(err => console.error("Erreur d'initialisation :", err));

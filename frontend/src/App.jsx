@@ -1,32 +1,28 @@
 import { useState } from "react";
-import axios from "axios";
 import Auth from "./pages/Auth";
 import Home from "./Home";
-
-const api = axios.create({
-  baseURL: "http://localhost:8000",
-  withCredentials: true
-});
+import api from "./api";
 
 function App() {
-  const [user, setUser] = useState({
-    username: "Robin",
-    firstName: "Rob",
-    lastName: "B",
-    email: "robin@rob.fr",
-    role: "admin",
-    birthdate: "2003-06-01"
-  });
-
+  const [user, setUser] = useState(null);
   function handleAuthSuccess(connectedUser) {
     setUser(connectedUser);
   }
+
+  const handleLogout = async () => {
+    try {
+      await api.post("/user/logout");
+    } catch (err) {
+      console.error("Erreur lors de la déconnexion:", err);
+    }
+    setUser(null);
+  };
 
   if (!user) {
     return <Auth onAuthSuccess={handleAuthSuccess} api={api} />;
   }
 
-  return <Home user={user} onLogout={() => setUser(null)} api={api} />;
+  return <Home user={user} onLogout={handleLogout} api={api} />;
 }
 
 export default App;
