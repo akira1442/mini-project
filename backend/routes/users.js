@@ -23,7 +23,7 @@ const isAdmin = (req, res, next) => {
 // Insrciption
 router.post("/user", async (req, res) => {
 
-    let { pseudo, mdp, firstname, lastname } = req.body;
+    let { pseudo, mdp, firstname, lastname, birthdate } = req.body;
     if (!firstname || !lastname) {
         return res.status(400).send("Champs personnels incorrect");
     }
@@ -73,6 +73,7 @@ router.post("/user", async (req, res) => {
         motDePasse: mdp,
         firstname: firstname.trim(),
         lastname: lastname.trim(),
+        birthdate: birthdate,
         role: "membre",
         valide: false,
         dateDeCreation: new Date()
@@ -130,7 +131,8 @@ router.post("/user/login", async (req, res) => {
                 username: existUser.pseudo,
                 role: existUser.role,
                 firstname: existUser.firstname,
-                lastname: existUser.lastname
+                lastname: existUser.lastname,
+                birthdate: existUser.birthdate
             }
         });
     } else {
@@ -190,10 +192,11 @@ router.post("/admin/users/validate", isAuthenticated, isAdmin, async (req, res) 
             { $set: { valide: true } },
             { returnDocument: "after" }
         );
-        if (!result.value) {
+        const updatedUser = result.value || result;
+        if (!updatedUser) {
             return res.status(404).json("Utilisateur introuvable");
         }
-        return res.status(200).json({ message: "Utilisateur validé", user: result.value });
+        return res.status(200).json({ message: "Utilisateur validé", user: updatedUser });
     } catch (err) {
         return res.status(500).json("Erreur serveur lors de la validation de l'utilisateur.");
     }
@@ -232,70 +235,6 @@ router.get("/user/login/:login", async (req, res) => {
     }
 });
 
-// Envoyer une demande d'ami
-router.post("/friends/demandes", isAuthenticated, async (req, res) => {
-
-    try {
-        const { pseudoCible } = req.body;
-        const userId = req.session.userId;
-
-        if (!pseudoCible) {
-            return res.status(400).send("Erreur champs incorrect");
-        }
-
-        const demande = await User.existeDemande(req.app.locals.db, userId, pseudoCible);
-        if (demande) {
-            return res.status(400).send("Demande en attente");
-        }
-
-        await User.demandeAmi(req.app.locals.db, userId, pseudoCible);
-        res.status(200).send("Demande envoyée");
-    } catch (err) {
-        if (err.message === "Erreur demande impossible") {
-            return res.status(400).send(err.message);
-        }
-        if (err.message === "Erreur demande introuvable") {
-            return res.status(404).send(err.message);
-        }
-        res.status(500).send("Erreur server");
-    }
-});
-
-router.post("/friends/accepte/:demandeId", isAuthenticated, async (req, res) => {
-    try {
-        const demandeId = req.params.demandeId;
-        const userId = req.session.userId;
-
-        const demande = await User.accepteAmi(req.app.locals.db, demandeId, userId);
-        res.status(200).json({ message: "Demande acceptée", demande });
-
-    } catch (err) {
-        if (err.message === "Demande introuvable") {
-            return res.status(404).json(err.message);
-        }
-        if (err.message === "Non autorisé") {
-            return res.status(403).json(err.message);
-        }
-        console.error(err);
-        res.status(500).json("Erreur serveur");
-    }
-});
-
-// Liste des demandes d'amis
-router.get("/friends/requests", isAuthenticated, async (req, res) => {
-    try {
-        const userId = req.session.userId;
-        const demandes = await Friends.find({
-            receiver: userId,
-            status: 'attente'
-        }).populate('sender');
-        res.status(200).json(demandes);
-    } catch (err) {
-        console.error(err);
-        res.status(500).json("Erreur serveur");
-    }
-});
-
 // Accepter une insciption ADMIN
 router.post("/user/utilisateur", isAuthenticated, isAdmin, async (req, res) => {
     const { user_id } = req.body;
@@ -328,7 +267,7 @@ router.post("/user/promote", isAuthenticated, isAdmin, async (req, res) => {
         
         return res.status(200).json({ 
             message: `Utilisateur ${newRole === "admin" ? "promu" : "rétrogradé"}`, 
-            user: result.value 
+            user: result.value || result
         });
     } catch (err) {
         return res.status(500).json("Erreur lors de la mise à jour du rôle.");
