@@ -12,10 +12,8 @@ function AddMsg({ write, forum, placeholder, isReply, threadId }) {
             write(e, threadId, text);
             setText("");
         } else {
-            // Combiner titre et texte pour le backend
-            const fullText = title.trim() ? `${title}\n\n${text}` : text;
-            if (!fullText.trim()) return;
-            write(null, fullText);  // Backend n'utilise que le texte
+            if (!text.trim()) return;
+            write(title, text);
             setTitle("");
             setText("");
         }

@@ -28,7 +28,9 @@ function Auth({ onAuthSuccess, api }) {
                     pseudo: username,
                     mdp: password,
                     firstname: firstName,
-                    lastname: lastName
+                    lastname: lastName,
+                    dateNaissance: birthdate,
+                    email: email
                 };
             } else {
                 dataToSend = {

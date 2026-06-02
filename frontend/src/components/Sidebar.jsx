@@ -2,6 +2,7 @@
 function Sidebar({
     time, searchQuery, setSearchQuery, dateDeb, setDateDeb, dateFin, setDateFin,
     notifications, friendInput, setFriendInput, handleAddFriend,
+    pendingFriendRequests, handleAcceptFriendRequest, handleRejectFriendRequest,
     messagesPrives, mpDest, setMpDest, mpTxt, setMpTxt, handleSendMP, showSearch
 }) {
     return (
@@ -33,6 +34,22 @@ function Sidebar({
 
             <div className="forum-aside-card">
                 <h4>👥 Amis & Notifications</h4>
+                {pendingFriendRequests && pendingFriendRequests.length > 0 && (
+                    <div style={{ marginBottom: "15px" }}>
+                        <h5 style={{ margin: "0 0 10px 0", color: "#aa3bff" }}>Demandes reçues</h5>
+                        <ul className="forum-notif-list">
+                            {pendingFriendRequests.map(req => (
+                                <li key={req._id} style={{ display: "flex", flexDirection: "column", gap: "5px", marginBottom: "10px" }}>
+                                    <span><b>@{req.fromPseudo}</b> veut être votre ami</span>
+                                    <div style={{ display: "flex", gap: "5px" }}>
+                                        <button onClick={() => handleAcceptFriendRequest(req._id)} style={{ padding: "4px 8px", fontSize: "12px", background: "#4CAF50", color: "white", border: "none", borderRadius: "3px", cursor: "pointer" }}>Accepter</button>
+                                        <button onClick={() => handleRejectFriendRequest(req._id)} style={{ padding: "4px 8px", fontSize: "12px", background: "#f44336", color: "white", border: "none", borderRadius: "3px", cursor: "pointer" }}>Refuser</button>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
                 <ul className="forum-notif-list">
                     {notifications.map((n, i) => <li key={i}>{n}</li>)}
                 </ul>

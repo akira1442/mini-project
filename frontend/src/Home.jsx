@@ -9,7 +9,7 @@ import "./Home.css";
 function Home({ user, onLogout, api }) {
     const [time, setTime] = useState(new Date().toLocaleTimeString("fr-FR"));
     const [isBirthdayToday, setIsBirthdayToday] = useState(false);
-    const [currentView, setCurrentView] = useState("forume_public");
+    const [currentView, setCurrentView] = useState("forum_public");
     const [selectedProfile, setSelectedProfile] = useState(null);
 
     const [threads, setThreads] = useState([]);
@@ -80,11 +80,30 @@ function Home({ user, onLogout, api }) {
         }
     };
 
+    const fetchMPs = async () => {
+        try {
+            const response = await api.get("/mp");
+            setMessagesPrives(response.data || []);
+        } catch (err) {
+            console.error("Erreur lors du chargement des MP:", err);
+        }
+    };
+
     // Then declare effects
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date().toLocaleTimeString("fr-FR")), 1000);
         // TODO: Implement birthday check when birthdate is available in user data
         return () => clearInterval(timer);
+    }, [user]);
+
+    useEffect(() => {
+        if (user && user.birthdate) {
+            const today = new Date();
+            const birthday = new Date(user.birthdate);
+            if (today.getDate() === birthday.getDate() && today.getMonth() === birthday.getMonth()) {
+                setIsBirthdayToday(true);
+            }
+        }
     }, [user]);
 
     useEffect(() => {
@@ -98,14 +117,13 @@ function Home({ user, onLogout, api }) {
         fetchMessages();
         fetchFriendRequests();
         fetchFriends();
+        fetchMPs();
     }, []);
 
     const handleCreateThread = async (title, text) => {
         try {
-            // text param might be combined (title + text) or just text if title is null
-            const messageText = text;
-            const forum = currentView === "forume_prive" ? "ferme" : "public";
-            await api.post("/message", { text: messageText, forum });
+            const forum = currentView === "forum_prive" ? "ferme" : "public";
+            await api.post("/message", { title, text, forum });
             await fetchMessages();
         } catch (err) {
             console.error("Erreur création message:", err);
@@ -113,11 +131,29 @@ function Home({ user, onLogout, api }) {
         }
     };
 
-    const handleCreateReply = (e, threadId, text) => {
+    const handleSendMP = async (e) => {
         e.preventDefault();
-        const newReply = { author: user.username, date: new Date().toISOString(), text };
-        setThreads(threads.map(t => t._id === threadId ? { ...t, replies: [...t.replies, newReply] } : t));
-        setActiveThreadReplyId(null);
+        if (!mpDest.trim() || !mpTxt.trim()) return;
+
+        try {
+            await api.post("/mp", { dest: mpDest.trim(), text: mpTxt });
+            setMpTxt("");
+            await fetchMPs();
+        } catch (err) {
+            alert(err.response?.data || "Erreur lors de l'envoi du message privé");
+        }
+    };
+
+    const handleCreateReply = async (e, threadId, text) => {
+        e.preventDefault();
+        try {
+            await api.post(`/message/${threadId}/reply`, { text });
+            await fetchMessages();
+            setActiveThreadReplyId(null);
+        } catch (err) {
+            console.error("Erreur lors de l'envoi du commentaire:", err);
+            alert("Erreur: Impossible de publier le commentaire");
+        }
     };
 
     const handleDeleteThread = async (threadId) => {
@@ -213,8 +249,8 @@ function Home({ user, onLogout, api }) {
 
     const filteredAndSortedThreads = threads
         .filter(t => {
-            if (currentView === "forume_public") return t.forum === "public";
-            if (currentView === "forume_prive") return t.forum === "ferme";
+            if (currentView === "forum_public") return t.forum === "public";
+            if (currentView === "forum_prive") return t.forum === "ferme";
             if (currentView === "likes") return likedThreads.includes(t._id);
             return true;
         })
@@ -283,8 +319,8 @@ function Home({ user, onLogout, api }) {
                     <div className="forum-nav-brand">
                         <img src={logo} alt="Logo" className="forum-nav-logo-img" />
                         <div className="forum-nav-center-menu">
-                            <button className={currentView === "forume_public" ? "active" : ""} onClick={() => { setCurrentView("forume_public"); setSelectedProfile(null); }}>Forum public</button>
-                            {user.role === "admin" && <button className={currentView === "forume_prive" ? "active" : ""} onClick={() => { setCurrentView("forume_prive"); setSelectedProfile(null); }}>Forum privé (ADMIN)</button>}
+                            <button className={currentView === "forum_public" ? "active" : ""} onClick={() => { setCurrentView("forum_public"); setSelectedProfile(null); }}>Forum public</button>
+                            {user.role === "admin" && <button className={currentView === "forum_prive" ? "active" : ""} onClick={() => { setCurrentView("forum_prive"); setSelectedProfile(null); }}>Forum privé (ADMIN)</button>}
                             <button className={currentView === "likes" ? "active" : ""} onClick={() => { setCurrentView("likes"); setSelectedProfile(null); }}>Likes</button>
                             <button className={currentView === "profil" && !selectedProfile ? "active" : ""} onClick={() => { setSelectedProfile(null); setCurrentView("profil"); }}>Profil</button>
                             <button className={currentView === "amis" ? "active" : ""} onClick={() => { setCurrentView("amis"); setSelectedProfile(null); }}>Amis</button>
@@ -301,14 +337,30 @@ function Home({ user, onLogout, api }) {
 
             <main className="forum-main-content">
                 <Sidebar 
-                    time={time} searchQuery={searchQuery} setSearchQuery={setSearchQuery} dateDeb={dateDeb} setDateDeb={setDateDeb} dateFin={dateFin} setDateFin={setDateFin}
-                    notifications={notifications} friendInput={friendInput} setFriendInput={setFriendInput} handleAddFriend={(e) => { e.preventDefault(); if(friendInput) { setNotifications([...notifications, `${friendInput} vous a ajouté.`, `🎂 Anniversaire de @${friendInput} !`]); setFriends([...friends, friendInput]); setFriendInput(""); } }}
-                    messagesPrives={messagesPrives} mpDest={mpDest} setMpDest={setMpDest} mpTxt={mpTxt} setMpTxt={setMpTxt} handleSendMP={(e) => { e.preventDefault(); setMessagesPrives([...messagesPrives, { dest: mpDest, text: mpTxt }]); setMpTxt(""); }}
-                    showSearch={currentView === "forume_public" || currentView === "forume_prive" || currentView === "likes"}
+                    time={time} 
+                    searchQuery={searchQuery} 
+                    setSearchQuery={setSearchQuery} 
+                    dateDeb={dateDeb} 
+                    setDateDeb={setDateDeb} 
+                    dateFin={dateFin} 
+                    setDateFin={setDateFin}
+                    notifications={notifications} 
+                    friendInput={friendInput} 
+                    setFriendInput={setFriendInput} 
+                    handleAddFriend={handleAddFriend}
+                    pendingFriendRequests={pendingFriendRequests} 
+                    handleAcceptFriendRequest={handleAcceptFriendRequest} 
+                    handleRejectFriendRequest={handleRejectFriendRequest}
+                    messagesPrives={messagesPrives} 
+                    mpDest={mpDest} setMpDest={setMpDest} 
+                    mpTxt={mpTxt} 
+                    setMpTxt={setMpTxt} 
+                    handleSendMP={handleSendMP}
+                    showSearch={currentView === "forum_public" || currentView === "forum_prive" || currentView === "likes"}
                 />
 
                 <section className="forum-feed-section">
-                    {(currentView === "forume_public" || currentView === "forume_prive" || currentView === "likes") && (
+                    {(currentView === "forum_public" || currentView === "forum_prive" || currentView === "likes") && (
                         <>
                             {currentView !== "likes" && (
                                 <div id="new_comment" className="forum-editor-box">
@@ -326,14 +378,19 @@ function Home({ user, onLogout, api }) {
                                     {filteredAndSortedThreads.map((thread) => (
                                         <li key={thread._id} className="forum-thread-card">
                                             <div className="forum-card-header">
-                                                <p><span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => { setSelectedProfile(usersList.find(u => (u.pseudo || u.username) === thread.auteur) || { username: thread.auteur }); setCurrentView("profil"); }}>@{thread.auteur}</span></p>
+                                                <p>
+                                                    <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => { setSelectedProfile(usersList.find(u => (u.pseudo || u.username) === thread.auteur) || { username: thread.auteur }); setCurrentView("profil"); }}>@{thread.auteur}</span>
+                                                    <span className="forum-thread-date" style={{ marginLeft: "10px", fontSize: "12px", color: "#888" }}>
+                                                        {new Date(thread.date).toLocaleString("fr-FR")}
+                                                    </span>
+                                                </p>
                                                 <div className="forum-card-actions">
                                                     <button className="forum-sort-tab" style={{ fontSize: "12px" }} onClick={() => setActiveThreadReplyId(activeThreadReplyId === thread._id ? null : thread._id)}>💬 Répondre</button>
                                                     <button className={`forum-like-trigger ${likedThreads.includes(thread._id) ? "is-liked" : ""}`} onClick={() => handleLike(thread._id)}>❤️ {thread.likes || 0}</button>
                                                     {(user.username === thread.auteur || user.role === "admin") && <button className="forum-delete-trigger" onClick={() => handleDeleteThread(thread._id)}>❌</button>}
                                                 </div>
                                             </div>
-                                            <h2>{thread.text?.substring(0, 100) || "Message"}</h2>
+                                            <h2>{thread.title || "Message"}</h2>
                                             <blockquote className="forum-card-blockquote">
                                                 <p>{thread.text}</p>
 
@@ -346,7 +403,10 @@ function Home({ user, onLogout, api }) {
                                                 {(thread.replies || []).map((reply, index) => (
                                                     <div key={index} className="forum-nested-reply">
                                                         <div className="forum-reply-meta">
-                                                            <p><b>@{reply.author}</b></p>
+                                                            <p>
+                                                                <b>@{reply.author}</b>
+                                                                {reply.date && <span style={{ marginLeft: "10px", fontSize: "12px", color: "#888" }}>{new Date(reply.date).toLocaleString("fr-FR")}</span>}
+                                                            </p>
                                                             {(user.username === reply.author || user.role === "admin") && <button className="forum-reply-delete" onClick={() => handleDeleteReply(thread._id, index)}>Supprimer</button>}
                                                         </div>
                                                         <blockquote className="forum-reply-content-text">{reply.text}</blockquote>
@@ -367,13 +427,13 @@ function Home({ user, onLogout, api }) {
                             <h3>📑 Messages publiés :</h3>
                             <ul>
                                 {threads.filter(t => t.auteur === (selectedProfile ? selectedProfile.username : user.username)).map(t => (
-                                    <li key={t._id}>{t.text.substring(0, 50)}... {(!selectedProfile || user.role === "admin") && <button onClick={() => handleDeleteThread(t._id)}>Supprimer</button>}</li>
+                                    <li key={t._id}>{(t.title || t.text).substring(0, 50)}... {(!selectedProfile || user.role === "admin") && <button onClick={() => handleDeleteThread(t._id)}>Supprimer</button>}</li>
                                 ))}
                             </ul>
                         </div>
                     )}
 
-                    {currentView === "amis" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>👥 Membres suivis ({friends.length})</h2><ul>{friends.map((f, i) => <li key={i}>@{f}</li>)}</ul></div>}
+                    {currentView === "amis" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>👥 Membres suivis ({friends.length})</h2><ul>{friends.map((f, i) => <li key={i}>@{typeof f === 'object' ? f.friendPseudo : f}</li>)}</ul></div>}
                     {currentView === "faq" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>FAQ</h2><p>LISTE  DE QUESTIONS REPONSES MDRR TROUVER IDEES AVEC NAWAD</p></div>}
                     {currentView === "admin_panel" && user.role === "admin" && <AdminPanel usersList={usersList} pendingUsers={pendingUsers} handleValidateRegistration={handleValidateRegistration} handleToggleAdminRole={handleToggleAdminRole} currentUser={user} />}
                     
