@@ -82,7 +82,7 @@ function AuthForm({
                             type="text"
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            placeholder="Choisis ton pseudo"
+                            placeholder="Entre ton pseudo"
                             className="auth-input"
                             required
                         />

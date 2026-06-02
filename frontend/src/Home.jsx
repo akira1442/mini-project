@@ -1,9 +1,12 @@
 /* eslint-disable react/prop-types */
+import ThreadFeed from "./components/ThreadFeed";
 import { useState, useEffect } from "react";
 import logo from "./assets/logo_noir.png";
 import AddMsg from "./components/AddMsg";
 import Sidebar from "./components/Sidebar";
 import AdminPanel from "./components/AdminPanel";
+import UserProfile from "./components/UserProfile";
+import UserFriends from "./components/UserFriends"; 
 import "./Home.css";
 
 function Home({ user, onLogout, api }) {
@@ -32,7 +35,6 @@ function Home({ user, onLogout, api }) {
     const [mpDest, setMpDest] = useState("");
     const [mpTxt, setMpTxt] = useState("");
 
-    // Declare all fetch and handler functions first
     const fetchMessages = async () => {
         try {
             const response = await api.get("/message/list");
@@ -89,10 +91,8 @@ function Home({ user, onLogout, api }) {
         }
     };
 
-    // Then declare effects
     useEffect(() => {
         const timer = setInterval(() => setTime(new Date().toLocaleTimeString("fr-FR")), 1000);
-        // TODO: Implement birthday check when birthdate is available in user data
         return () => clearInterval(timer);
     }, [user]);
 
@@ -118,6 +118,9 @@ function Home({ user, onLogout, api }) {
         fetchFriendRequests();
         fetchFriends();
         fetchMPs();
+        if (user?.role === "admin") {
+            fetchUsersList();
+        }
     }, []);
 
     const handleCreateThread = async (title, text) => {
@@ -134,7 +137,6 @@ function Home({ user, onLogout, api }) {
     const handleSendMP = async (e) => {
         e.preventDefault();
         if (!mpDest.trim() || !mpTxt.trim()) return;
-
         try {
             await api.post("/mp", { dest: mpDest.trim(), text: mpTxt });
             setMpTxt("");
@@ -165,7 +167,7 @@ function Home({ user, onLogout, api }) {
             alert("Erreur: Impossible de supprimer le message");
         }
     };
-    
+
     const handleDeleteReply = (threadId, replyIndex) => {
         setThreads(threads.map(t => t._id === threadId ? { ...t, replies: t.replies.filter((_, idx) => idx !== replyIndex) } : t));
     };
@@ -174,13 +176,7 @@ function Home({ user, onLogout, api }) {
         try {
             const response = await api.post(`/message/${threadId}/like`);
             const newLikes = response.data.likes;
-            
-            // Mettre à jour le thread avec les nouveaux likes
-            setThreads(threads.map(t => 
-                t._id === threadId ? { ...t, likes: newLikes } : t
-            ));
-            
-            // Ajouter/retirer de la liste des likes locaux pour changer la couleur du bouton
+            setThreads(threads.map(t => t._id === threadId ? { ...t, likes: newLikes } : t));
             if (likedThreads.includes(threadId)) {
                 setLikedThreads(likedThreads.filter(id => id !== threadId));
             } else {
@@ -207,9 +203,10 @@ function Home({ user, onLogout, api }) {
         if (targetPseudo === user.username) return;
         try {
             await api.post("/user/promote", { user_id: targetPseudo });
-            setUsersList(usersList.map(u => (u.pseudo || u.username) === targetPseudo ? { ...u, role: u.role === "admin" ? "membre" : "admin" } : u));
+            await fetchUsersList();
         } catch (err) {
-            console.error("Erreur lors de la promotion/démotion", err);
+            console.error("Erreur", err);
+            alert("Impossible de modifier le rôle de cet utilisateur.");
         }
     };
 
@@ -247,16 +244,14 @@ function Home({ user, onLogout, api }) {
         }
     };
 
-    const filteredAndSortedThreads = threads
+    const filteredAndSortedThreads = threads.filter(t => {
+        if (currentView === "forum_public") return t.forum === "public";
+        if (currentView === "forum_prive") return t.forum === "ferme";
+        if (currentView === "likes") return likedThreads.includes(t._id);
+        return true;
+    })
         .filter(t => {
-            if (currentView === "forum_public") return t.forum === "public";
-            if (currentView === "forum_prive") return t.forum === "ferme";
-            if (currentView === "likes") return likedThreads.includes(t._id);
-            return true;
-        })
-        .filter(t => {
-            const matchesKeyword = (t.text || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (t.auteur || "").toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesKeyword = (t.text || "").toLowerCase().includes(searchQuery.toLowerCase()) || (t.auteur || "").toLowerCase().includes(searchQuery.toLowerCase()) || (t.title || "").toLowerCase().includes(searchQuery.toLowerCase());
             const threadDate = new Date(t.date);
             const matchesDateDeb = dateDeb ? threadDate >= new Date(dateDeb) : true;
             const matchesDateFin = dateFin ? threadDate <= new Date(dateFin + "T23:59:59") : true;
@@ -274,40 +269,19 @@ function Home({ user, onLogout, api }) {
                                 <h2 style={{ textAlign: "center", lineHeight: "1.4" }}>
                                     🎉 Joyeux Anniversaire {user.firstName} {user.lastName}
                                 </h2>
-
                                 <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginTop: "20px" }}>
-                                    <button className="birthday-ack-btn" onClick={() => setIsBirthdayToday(false)}>
-                                        Merci !
-                                    </button>
-                                    <button
-                                        className="birthday-ack-btn"
-                                        style={{ backgroundColor: "#c0392b" }}
-                                        onClick={() => setAMenti(true)}
-                                    >
-                                        Ce n'est pas mon anniversaire
-                                    </button>
+                                    <button className="birthday-ack-btn" onClick={() => setIsBirthdayToday(false)}>Merci !</button>
+                                    <button className="birthday-ack-btn" style={{ backgroundColor: "#c0392b" }} onClick={() => setAMenti(true)}>Ce n'est pas mon anniversaire</button>
                                 </div>
                             </>
                         ) : (
                             <>
-                                <h2 style={{ textAlign: "center", color: "#c0392b", fontSize: "28px" }}>
-                                    COMPTE SUSPENDU
-                                </h2>
+                                <h2 style={{ textAlign: "center", color: "#c0392b", fontSize: "28px" }}>COMPTE SUSPENDU</h2>
                                 <p style={{ textAlign: "center", fontWeight: "bold", fontSize: "18px", margin: "20px 0", color: "#08060d" }}>
-                                    TU NOUS AS MENTI SUR TA DATE DE NAISSANCE !
-                                    <br /><br />
+                                    TU NOUS AS MENTI SUR TA DATE DE NAISSANCE !<br /><br />
                                     <span style={{ color: "#c0392b" }}>TON COMPTE VA ÊTRE SUPPRIMÉ D'ICI 10 SECONDES.</span>
                                 </p>
-                                <button
-                                    className="birthday-ack-btn"
-                                    style={{ backgroundColor: "#08060d" }}
-                                    onClick={() => {
-                                        setAMenti(false);
-                                        setIsBirthdayToday(false);
-                                    }}
-                                >
-                                (je n'ai rien vu)
-                                </button>
+                                <button className="birthday-ack-btn" style={{ backgroundColor: "#08060d" }} onClick={() => { setAMenti(false); setIsBirthdayToday(false); }}>(je n'ai rien vu)</button>
                             </>
                         )}
                     </div>
@@ -324,7 +298,6 @@ function Home({ user, onLogout, api }) {
                             <button className={currentView === "likes" ? "active" : ""} onClick={() => { setCurrentView("likes"); setSelectedProfile(null); }}>Likes</button>
                             <button className={currentView === "profil" && !selectedProfile ? "active" : ""} onClick={() => { setSelectedProfile(null); setCurrentView("profil"); }}>Profil</button>
                             <button className={currentView === "amis" ? "active" : ""} onClick={() => { setCurrentView("amis"); setSelectedProfile(null); }}>Amis</button>
-                            <button className={currentView === "faq" ? "active" : ""} onClick={() => { setCurrentView("faq"); setSelectedProfile(null); }}>FAQ</button>
                             {user.role === "admin" && <button className={currentView === "admin_panel" ? "active" : ""} onClick={() => { setCurrentView("admin_panel"); setSelectedProfile(null); }}>Page Admin</button>}
                         </div>
                     </div>
@@ -336,107 +309,57 @@ function Home({ user, onLogout, api }) {
             </header>
 
             <main className="forum-main-content">
-                <Sidebar 
-                    time={time} 
-                    searchQuery={searchQuery} 
-                    setSearchQuery={setSearchQuery} 
-                    dateDeb={dateDeb} 
-                    setDateDeb={setDateDeb} 
-                    dateFin={dateFin} 
-                    setDateFin={setDateFin}
-                    notifications={notifications} 
-                    friendInput={friendInput} 
-                    setFriendInput={setFriendInput} 
-                    handleAddFriend={handleAddFriend}
-                    pendingFriendRequests={pendingFriendRequests} 
-                    handleAcceptFriendRequest={handleAcceptFriendRequest} 
-                    handleRejectFriendRequest={handleRejectFriendRequest}
-                    messagesPrives={messagesPrives} 
-                    mpDest={mpDest} setMpDest={setMpDest} 
-                    mpTxt={mpTxt} 
-                    setMpTxt={setMpTxt} 
-                    handleSendMP={handleSendMP}
+                <Sidebar
+                    time={time} searchQuery={searchQuery} setSearchQuery={setSearchQuery} dateDeb={dateDeb} setDateDeb={setDateDeb} dateFin={dateFin} setDateFin={setDateFin}
+                    notifications={notifications} friendInput={friendInput} setFriendInput={setFriendInput} handleAddFriend={handleAddFriend}
+                    pendingFriendRequests={pendingFriendRequests} handleAcceptFriendRequest={handleAcceptFriendRequest} handleRejectFriendRequest={handleRejectFriendRequest}
+                    messagesPrives={messagesPrives} mpDest={mpDest} setMpDest={setMpDest} mpTxt={mpTxt} setMpTxt={setMpTxt} handleSendMP={handleSendMP}
                     showSearch={currentView === "forum_public" || currentView === "forum_prive" || currentView === "likes"}
                 />
 
                 <section className="forum-feed-section">
                     {(currentView === "forum_public" || currentView === "forum_prive" || currentView === "likes") && (
-                        <>
-                            {currentView !== "likes" && (
-                                <div id="new_comment" className="forum-editor-box">
-                                    <AddMsg write={handleCreateThread} forum={currentView} isReply={false} />
-                                </div>
-                            )}
-
-                            <div className="forum-sort-bar">
-                                <button className={sortBy === "date" ? "active" : ""} onClick={() => setSortBy("date")}>Récents</button>
-                                <button className={sortBy === "popularity" ? "active" : ""} onClick={() => setSortBy("popularity")}>Popularité</button>
-                            </div>
-
-                            <article className="forum-threads-article">
-                                <ul className="forum-cards-list">
-                                    {filteredAndSortedThreads.map((thread) => (
-                                        <li key={thread._id} className="forum-thread-card">
-                                            <div className="forum-card-header">
-                                                <p>
-                                                    <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={() => { setSelectedProfile(usersList.find(u => (u.pseudo || u.username) === thread.auteur) || { username: thread.auteur }); setCurrentView("profil"); }}>@{thread.auteur}</span>
-                                                    <span className="forum-thread-date" style={{ marginLeft: "10px", fontSize: "12px", color: "#888" }}>
-                                                        {new Date(thread.date).toLocaleString("fr-FR")}
-                                                    </span>
-                                                </p>
-                                                <div className="forum-card-actions">
-                                                    <button className="forum-sort-tab" style={{ fontSize: "12px" }} onClick={() => setActiveThreadReplyId(activeThreadReplyId === thread._id ? null : thread._id)}>💬 Répondre</button>
-                                                    <button className={`forum-like-trigger ${likedThreads.includes(thread._id) ? "is-liked" : ""}`} onClick={() => handleLike(thread._id)}>❤️ {thread.likes || 0}</button>
-                                                    {(user.username === thread.auteur || user.role === "admin") && <button className="forum-delete-trigger" onClick={() => handleDeleteThread(thread._id)}>❌</button>}
-                                                </div>
-                                            </div>
-                                            <h2>{thread.title || "Message"}</h2>
-                                            <blockquote className="forum-card-blockquote">
-                                                <p>{thread.text}</p>
-
-                                                {activeThreadReplyId === thread._id && (
-                                                    <div style={{ marginTop: "10px" }}>
-                                                        <AddMsg write={handleCreateReply} isReply={true} threadId={thread._id} placeholder="Écrire un commentaire..." />
-                                                    </div>
-                                                )}
-
-                                                {(thread.replies || []).map((reply, index) => (
-                                                    <div key={index} className="forum-nested-reply">
-                                                        <div className="forum-reply-meta">
-                                                            <p>
-                                                                <b>@{reply.author}</b>
-                                                                {reply.date && <span style={{ marginLeft: "10px", fontSize: "12px", color: "#888" }}>{new Date(reply.date).toLocaleString("fr-FR")}</span>}
-                                                            </p>
-                                                            {(user.username === reply.author || user.role === "admin") && <button className="forum-reply-delete" onClick={() => handleDeleteReply(thread._id, index)}>Supprimer</button>}
-                                                        </div>
-                                                        <blockquote className="forum-reply-content-text">{reply.text}</blockquote>
-                                                    </div>
-                                                ))}
-                                            </blockquote>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </article>
-                        </>
+                        <ThreadFeed
+                            currentView={currentView}
+                            handleCreateThread={handleCreateThread}
+                            sortBy={sortBy}
+                            setSortBy={setSortBy}
+                            filteredAndSortedThreads={filteredAndSortedThreads}
+                            user={user}
+                            usersList={usersList}
+                            setSelectedProfile={setSelectedProfile}
+                            setCurrentView={setCurrentView}
+                            activeThreadReplyId={activeThreadReplyId}
+                            setActiveThreadReplyId={setActiveThreadReplyId}
+                            likedThreads={likedThreads}
+                            handleLike={handleLike}
+                            handleDeleteThread={handleDeleteThread}
+                            handleCreateReply={handleCreateReply}
+                            handleDeleteReply={handleDeleteReply}
+                        />
                     )}
 
+                    {/*Profil*/}
                     {currentView === "profil" && (
-                        <div className="forum-thread-card" style={{ padding: "25px" }}>
-                            <h2>👤 Profil de @{selectedProfile ? selectedProfile.username : user.username}</h2>
-                            <p>Rôle : {selectedProfile ? selectedProfile.role : user.role}</p>
-                            <h3>📑 Messages publiés :</h3>
-                            <ul>
-                                {threads.filter(t => t.auteur === (selectedProfile ? selectedProfile.username : user.username)).map(t => (
-                                    <li key={t._id}>{(t.title || t.text).substring(0, 50)}... {(!selectedProfile || user.role === "admin") && <button onClick={() => handleDeleteThread(t._id)}>Supprimer</button>}</li>
-                                ))}
-                            </ul>
-                        </div>
+                        <UserProfile user={user} selectedProfile={selectedProfile} threads={threads} handleDeleteThread={handleDeleteThread} />
                     )}
 
-                    {currentView === "amis" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>👥 Membres suivis ({friends.length})</h2><ul>{friends.map((f, i) => <li key={i}>@{typeof f === 'object' ? f.friendPseudo : f}</li>)}</ul></div>}
-                    {currentView === "faq" && <div className="forum-thread-card" style={{ padding: "25px" }}><h2>FAQ</h2><p>LISTE  DE QUESTIONS REPONSES MDRR TROUVER IDEES AVEC NAWAD</p></div>}
-                    {currentView === "admin_panel" && user.role === "admin" && <AdminPanel usersList={usersList} pendingUsers={pendingUsers} handleValidateRegistration={handleValidateRegistration} handleToggleAdminRole={handleToggleAdminRole} currentUser={user} />}
-                    
+                    {/*Amis*/}
+                    {currentView === "amis" && (
+                        <UserFriends friends={friends} />
+                    )}
+
+                    {/*Page Admin*/}
+                    {currentView === "admin_panel" && user.role === "admin" && (
+                        <AdminPanel
+                            usersList={usersList}
+                            pendingUsers={pendingUsers}
+                            handleValidateRegistration={handleValidateRegistration}
+                            handleToggleAdminRole={handleToggleAdminRole}
+                            currentUser={user}
+                        />
+                    )}
+
                     <p className="forum-academic-footer">BABUESA BANSITA Robin - KARIHILA Nawad</p>
                 </section>
             </main>

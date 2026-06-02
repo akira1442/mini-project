@@ -29,7 +29,7 @@ function Auth({ onAuthSuccess, api }) {
                     mdp: password,
                     firstname: firstName,
                     lastname: lastName,
-                    dateNaissance: birthdate,
+                    birthdate: birthdate,
                     email: email
                 };
             } else {
@@ -42,7 +42,7 @@ function Auth({ onAuthSuccess, api }) {
             const response = await api.post(endpoint, dataToSend);
 
             if (view === "inscription") {
-                alert("Inscription réussie ! En attente de validation. 🎉");
+                alert("Inscription réussie ! En attente de validation par un administrateur...");
                 setView("connexion");
             } else {
                 const connectedUser = response.data.user || {
@@ -56,7 +56,7 @@ function Auth({ onAuthSuccess, api }) {
             const serverMessage = error.response?.data;
             const status = error.response?.status;
             if (status === 403 && serverMessage === "Utilisateur non validé") {
-                setError("Votre inscription est en attente de validation par un admin.");
+                setError("Votre inscription est en attente de validation par un administrateur...");
             } else {
                 setError(typeof serverMessage === "string" ? serverMessage : "Identifiants ou données incorrectes.");
             }
