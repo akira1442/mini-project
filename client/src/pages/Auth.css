@@ -1,0 +1,142 @@
+.auth-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 85vh;
+    padding: 24px;
+}
+
+.auth-logo {
+    position: absolute;
+    top: 5px;
+    left: 5px;
+    height: 60px;
+}
+
+.auth-logo-text {
+    position: absolute;
+    top: 22px;
+    left: 100px;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.auth-badge {
+    font-size: 11px;
+    background: #eee;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+}
+
+.auth-main-title {
+    font-size: 70px;
+    margin: 20px 0 10px;
+}
+
+.auth-welcome-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.auth-primary-btn {
+    padding: 14px;
+    background: #000;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.auth-secondary-btn {
+    padding: 14px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.auth-footer-note {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.auth-back-btn {
+    border: none;
+    cursor: pointer;
+    margin-bottom: 20px;
+}
+
+.auth-form-title {
+    font-size: 26px;
+    margin: 0 0 6px;
+}
+
+.auth-form-subtitle {
+    font-size: 14px;
+    margin: 0 0 25px;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.auth-row {
+    display: flex;
+    gap: 12px;
+}
+
+.auth-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.auth-label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.auth-input {
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+}
+
+.auth-submit-btn {
+    padding: 12px;
+    background: #2a6645;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 10px;
+}
+
+.auth-error {
+    color: #ff1900;
+    font-size: 14px;
+}
+
+.auth-switch-mode-zone {
+    margin-top: 25px;
+    text-align: center;
+    border-top: 1px solid #ccc;
+    padding-top: 15px;
+}
+
+.auth-switch-text {
+    font-size: 14px;
+}
+
+.auth-link {
+    color: #2a6645;
+    font-weight: bold;
+    cursor: pointer;
+}
